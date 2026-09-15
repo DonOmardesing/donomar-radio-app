@@ -1,12 +1,22 @@
 package com.donomar.radio
 
-import android.app.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
 import android.content.Intent
-import android.media.*
-import android.media.projection.MediaProjection
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioPlaybackCaptureConfiguration
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 
 class StreamService : Service() {
@@ -19,14 +29,13 @@ class StreamService : Service() {
         val serverUrl = intent?.getStringExtra("SERVER_URL") ?: return START_NOT_STICKY
         
         val channelId = "donomar_stream"
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(channelId, "Radio Stream", NotificationManager.IMPORTANCE_LOW)
-        )
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(channelId, "Radio Stream", NotificationManager.IMPORTANCE_LOW)
+        manager.createNotificationChannel(channel)
         
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Don Omar Radio")
-            .setContentText("Transmitiendo audio interno y voz...")
+            .setContentText("Transmitiendo en vivo...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
@@ -52,7 +61,8 @@ class StreamService : Service() {
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        val config = AudioPlaybackCaptureConfiguration.Builder(MainActivity.mediaProjectionInstance!!)
+        val projection = MainActivity.mediaProjectionInstance ?: return
+        val config = AudioPlaybackCaptureConfiguration.Builder(projection)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
             .build()
