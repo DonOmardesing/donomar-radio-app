@@ -19,20 +19,48 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Fix Directory Structure and Manifest
+      - name: Normalize Project Structure
         run: |
-          mkdir -p app/src/main/java app/src/main/res
-          # Unificar archivos de carpetas con mayúsculas
-          [ -d "app/Src/main/Java" ] && cp -r app/Src/main/Java/* app/src/main/java/ || true
-          [ -d "app/Src/main/java" ] && cp -r app/Src/main/java/* app/src/main/java/ || true
-          [ -d "app/Src/main/res" ] && cp -r app/Src/main/res/* app/src/main/res/ || true
-          [ -d "app/src/Main/res" ] && cp -r app/src/Main/res/* app/src/main/res/ || true
-          # Corregir nombre del manifiesto
-          if [ -f "app/src/main/androidmanifiest.xml" ]; then
-            mv app/src/main/androidmanifiest.xml app/src/main/AndroidManifest.xml
-          fi
-          # Asegurar carpetas mínimas de recursos
-          mkdir -p app/src/main/res/values app/src/main/res/drawable
+          mkdir -p app/src/main/java/com/donomar/radio
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+
+          # Mover todos los archivos kotlin a la ruta canónica
+          find app -name "*.kt" -exec cp {} app/src/main/java/com/donomar/radio/ \;
+
+          # Generar AndroidManifest.xml estándar directamente en su sitio
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="Don Omar Radio"
+                  android:roundIcon="@android:drawable/sym_def_app_icon"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".StreamService"
+                      android:foregroundServiceType="mediaProjection"
+                      android:exported="false" />
+              </application>
+          </manifest>
+          EOF
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -48,6 +76,7 @@ jobs:
         with:
           name: DonOmarRadio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
