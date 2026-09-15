@@ -23,9 +23,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-
-      - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses || true
+          cache-disabled: true
 
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
@@ -35,4 +33,3 @@ jobs:
         with:
           name: DonOmarRadio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-
