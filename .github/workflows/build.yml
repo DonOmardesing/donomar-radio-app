@@ -26,7 +26,48 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # 1. AndroidManifest.xml con todos los permisos requeridos
+          # Dependencias (OkHttp para WebSocket)
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace 'com.donomar.radio'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.donomar.radio"
+                  minSdk 29
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+          }
+          EOF
+
+          # Manifest
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -42,7 +83,7 @@ jobs:
                   android:label="Don Omar Radio"
                   android:roundIcon="@android:drawable/sym_def_app_icon"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -59,7 +100,7 @@ jobs:
           </manifest>
           EOF
 
-          # 2. MainActivity.kt con solicitud de permisos en tiempo de ejecucion
+          # MainActivity.kt
           cat << 'EOF' > app/src/main/java/com/donomar/radio/MainActivity.kt
           package com.donomar.radio
 
@@ -68,11 +109,16 @@ jobs:
           import android.content.Context
           import android.content.Intent
           import android.content.pm.PackageManager
+          import android.graphics.Color
+          import android.graphics.Typeface
           import android.media.projection.MediaProjectionManager
           import android.os.Build
           import android.os.Bundle
+          import android.view.Gravity
           import android.widget.Button
+          import android.widget.EditText
           import android.widget.LinearLayout
+          import android.widget.TextView
           import android.widget.Toast
           import androidx.appcompat.app.AppCompatActivity
           import androidx.core.app.ActivityCompat
@@ -81,41 +127,81 @@ jobs:
           class MainActivity : AppCompatActivity() {
               private val REQUEST_MEDIA_PROJECTION = 1001
               private val REQUEST_PERMISSIONS = 1002
+              private lateinit var txtStatus: TextView
+              private lateinit var editUrl: EditText
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
+
                   val layout = LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
-                      setPadding(40, 80, 40, 40)
+                      gravity = Gravity.CENTER
+                      setBackgroundColor(Color.parseColor("#121212"))
+                      setPadding(50, 50, 50, 50)
+                  }
+
+                  val title = TextView(this).apply {
+                      text = "📻 DON OMAR RADIO"
+                      textSize = 24f
+                      setTextColor(Color.WHITE)
+                      typeface = Typeface.DEFAULT_BOLD
+                      gravity = Gravity.CENTER
+                  }
+
+                  txtStatus = TextView(this).apply {
+                      text = "⚪ DETENIDO"
+                      textSize = 16f
+                      setTextColor(Color.LTGRAY)
+                      gravity = Gravity.CENTER
+                      setPadding(0, 30, 0, 30)
+                  }
+
+                  editUrl = EditText(this).apply {
+                      hint = "wss://tu-servidor.onrender.com/broadcast"
+                      setHintTextColor(Color.GRAY)
+                      setTextColor(Color.WHITE)
+                      setBackgroundColor(Color.parseColor("#2A2A2A"))
+                      setPadding(30, 20, 30, 20)
                   }
 
                   val btnStart = Button(this).apply {
-                      text = "Iniciar Transmisión"
-                      setOnClickListener {
-                          checkAndRequestPermissions()
-                      }
+                      text = "▶ INICIAR TRANSMISIÓN"
+                      setBackgroundColor(Color.parseColor("#1DB954"))
+                      setTextColor(Color.WHITE)
+                      setOnClickListener { checkAndRequestPermissions() }
                   }
 
                   val btnStop = Button(this).apply {
-                      text = "Detener Transmisión"
+                      text = "⏹ DETENER"
+                      setBackgroundColor(Color.parseColor("#E50914"))
+                      setTextColor(Color.WHITE)
                       setOnClickListener {
                           stopService(Intent(this@MainActivity, StreamService::class.java))
+                          txtStatus.text = "⚪ DETENIDO"
+                          txtStatus.setTextColor(Color.LTGRAY)
                           Toast.makeText(this@MainActivity, "Transmisión detenida", Toast.LENGTH_SHORT).show()
                       }
                   }
 
+                  val spacer1 = LinearLayout(this).apply { layoutParams = LinearLayout.LayoutParams(1, 30) }
+                  val spacer2 = LinearLayout(this).apply { layoutParams = LinearLayout.LayoutParams(1, 20) }
+
+                  layout.addView(title)
+                  layout.addView(txtStatus)
+                  layout.addView(editUrl)
+                  layout.addView(spacer1)
                   layout.addView(btnStart)
+                  layout.addView(spacer2)
                   layout.addView(btnStop)
+
                   setContentView(layout)
               }
 
               private fun checkAndRequestPermissions() {
                   val permissionsNeeded = mutableListOf<String>()
-
                   if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                       permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
                   }
-
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                       if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                           permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -136,46 +222,37 @@ jobs:
 
               override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
                   super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-                  if (requestCode == REQUEST_PERMISSIONS) {
-                      val allGranted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-                      if (allGranted) {
-                          startProjection()
-                      } else {
-                          Toast.makeText(this, "Permisos necesarios no otorgados", Toast.LENGTH_SHORT).show()
-                      }
+                  if (requestCode == REQUEST_PERMISSIONS && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                      startProjection()
                   }
               }
 
               override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
                   super.onActivityResult(requestCode, resultCode, data)
-                  if (requestCode == REQUEST_MEDIA_PROJECTION) {
-                      if (resultCode == Activity.RESULT_OK && data != null) {
-                          val serviceIntent = Intent(this, StreamService::class.java).apply {
-                              putExtra("RESULT_CODE", resultCode)
-                              putExtra("DATA", data)
-                          }
-                          try {
-                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                  startForegroundService(serviceIntent)
-                              } else {
-                                  startService(serviceIntent)
-                              }
-                              Toast.makeText(this, "Transmisión iniciada", Toast.LENGTH_SHORT).show()
-                          } catch (e: Exception) {
-                              Toast.makeText(this, "Error al iniciar: ${e.message}", Toast.LENGTH_LONG).show()
-                          }
-                      } else {
-                          Toast.makeText(this, "Permiso de captura cancelado", Toast.LENGTH_SHORT).show()
+                  if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == Activity.RESULT_OK && data != null) {
+                      val serviceIntent = Intent(this, StreamService::class.java).apply {
+                          putExtra("RESULT_CODE", resultCode)
+                          putExtra("DATA", data)
+                          putExtra("WS_URL", editUrl.text.toString().trim())
                       }
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          startForegroundService(serviceIntent)
+                      } else {
+                          startService(serviceIntent)
+                      }
+                      txtStatus.text = "🔴 EN VIVO / TRANSMITIENDO"
+                      txtStatus.setTextColor(Color.parseColor("#00FF66"))
                   }
               }
           }
           EOF
 
-          # 3. StreamService.kt
+          # StreamService.kt con captura interna de audio y envío WebSocket
           cat << 'EOF' > app/src/main/java/com/donomar/radio/StreamService.kt
           package com.donomar.radio
 
+          import android.annotation.SuppressLint
+          import android.app.Activity
           import android.app.Notification
           import android.app.NotificationChannel
           import android.app.NotificationManager
@@ -183,23 +260,34 @@ jobs:
           import android.content.Context
           import android.content.Intent
           import android.content.pm.ServiceInfo
+          import android.media.AudioAttributes
+          import android.media.AudioFormat
+          import android.media.AudioPlaybackCaptureConfiguration
+          import android.media.AudioRecord
+          import android.media.projection.MediaProjection
+          import android.media.projection.MediaProjectionManager
           import android.os.Build
           import android.os.IBinder
           import androidx.core.app.NotificationCompat
+          import okhttp3.OkHttpClient
+          import okhttp3.Request
+          import okhttp3.WebSocket
+          import okhttp3.WebSocketListener
+          import okio.ByteString.Companion.toByteString
 
-          class StreamService : Service {
-              constructor() : super()
+          class StreamService : Service() {
+              private var mediaProjection: MediaProjection? = null
+              private var audioRecord: AudioRecord? = null
+              private var webSocket: WebSocket? = null
+              private var isStreaming = false
 
               override fun onBind(intent: Intent?): IBinder? = null
 
               override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
                   val channelId = "radio_stream_channel"
-                  val channelName = "Transmisión en Vivo"
-
                   val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-                      manager.createNotificationChannel(channel)
+                      manager.createNotificationChannel(NotificationChannel(channelId, "Transmisión", NotificationManager.IMPORTANCE_LOW))
                   }
 
                   val notification: Notification = NotificationCompat.Builder(this, channelId)
@@ -209,17 +297,80 @@ jobs:
                       .setOngoing(true)
                       .build()
 
-                  try {
-                      if (Build.VERSION.SDK_INT >= 34) {
-                          startForeground(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-                      } else {
-                          startForeground(101, notification)
-                      }
-                  } catch (e: Exception) {
-                      e.printStackTrace()
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      startForeground(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+                  } else {
+                      startForeground(101, notification)
+                  }
+
+                  val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
+                  val data = intent?.getParcelableExtra<Intent>("DATA")
+                  val wsUrl = intent?.getStringExtra("WS_URL") ?: ""
+
+                  if (resultCode == Activity.RESULT_OK && data != null) {
+                      startAudioStreaming(resultCode, data, wsUrl)
                   }
 
                   return START_STICKY
+              }
+
+              @SuppressLint("MissingPermission")
+              private fun startAudioStreaming(resultCode: Int, data: Intent, wsUrl: String) {
+                  val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                  mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+
+                  if (wsUrl.isNotEmpty()) {
+                      val client = OkHttpClient()
+                      val request = Request.Builder().url(wsUrl).build()
+                      webSocket = client.newWebSocket(request, object : WebSocketListener() {})
+                  }
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && mediaProjection != null) {
+                      val config = AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
+                          .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                          .build()
+
+                      val sampleRate = 44100
+                      val channelConfig = AudioFormat.CHANNEL_IN_STEREO
+                      val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+                      val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+
+                      audioRecord = AudioRecord.Builder()
+                          .setAudioFormat(AudioFormat.Builder()
+                              .setEncoding(audioFormat)
+                              .setSampleRate(sampleRate)
+                              .setChannelMask(channelConfig)
+                              .build())
+                          .setAudioPlaybackCaptureConfig(config)
+                          .setBufferSizeInBytes(bufferSize)
+                          .build()
+
+                      audioRecord?.startRecording()
+                      isStreaming = true
+
+                      Thread {
+                          val buffer = ByteArray(bufferSize)
+                          while (isStreaming) {
+                              val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                              if (read > 0 && webSocket != null) {
+                                  webSocket?.send(buffer.toByteString(0, read))
+                              }
+                          }
+                      }.start()
+                  }
+              }
+
+              override fun onDestroy() {
+                  isStreaming = false
+                  try {
+                      audioRecord?.stop()
+                      audioRecord?.release()
+                      mediaProjection?.stop()
+                      webSocket?.close(1000, "Detenido por el usuario")
+                  } catch (e: Exception) {
+                      e.printStackTrace()
+                  }
+                  super.onDestroy()
               }
           }
           EOF
@@ -238,6 +389,7 @@ jobs:
         with:
           name: DonOmarRadio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
