@@ -19,12 +19,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Ensure missing Android directories exist
-        run: |
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/assets
+      - name: List Repository Structure
+        run: find . -maxdepth 4 -not -path '*/.*'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -33,11 +29,12 @@ jobs:
           cache-disabled: true
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --info --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: DonOmarRadio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
 
